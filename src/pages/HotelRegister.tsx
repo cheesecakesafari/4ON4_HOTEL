@@ -1,33 +1,52 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useHotel } from '@/contexts/HotelContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
+
+type DepartmentRole =
+  | 'restaurant'
+  | 'kitchen'
+  | 'rooms'
+  | 'conference'
+  | 'bar'
+  | 'bar_admin'
+  | 'accountant'
+  | 'admin';
+
+const DEPARTMENTS: { value: DepartmentRole; label: string }[] = [
+  { value: 'restaurant', label: 'Restaurant' },
+  { value: 'kitchen', label: 'Kitchen' },
+  { value: 'rooms', label: 'Rooms' },
+  { value: 'conference', label: 'Conference' },
+  { value: 'bar', label: 'Bar Staff' },
+  { value: 'bar_admin', label: 'Bar Admin' },
+  { value: 'accountant', label: 'Accounts' },
+  { value: 'admin', label: 'Admin' },
+];
 
 export default function HotelRegister() {
   const [hotelName, setHotelName] = useState('');
-  const [hotelCode, setHotelCode] = useState('');
+  const [domain, setDomain] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [takenCodes, setTakenCodes] = useState<string[]>([]);
+  const [enabledDepartments, setEnabledDepartments] = useState<DepartmentRole[]>(['restaurant']);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { setHotel } = useHotel();
 
-  useEffect(() => {
-    const fetchTakenCodes = async () => {
-      const { data } = await supabase.from('hotels').select('hotel_code');
-      if (data) {
-        setTakenCodes(data.map(h => h.hotel_code));
-      }
-    };
-    fetchTakenCodes();
-  }, []);
-
-  const isCodeAvailable = hotelCode.length === 2 && !takenCodes.includes(hotelCode);
+  const toggleDept = (dept: DepartmentRole) => {
+    setEnabledDepartments((prev) =>
+      prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,32 +55,48 @@ export default function HotelRegister() {
       toast({ title: 'Hotel name required', variant: 'destructive' });
       return;
     }
-    if (hotelCode.length !== 2 || !/^\d{2}$/.test(hotelCode)) {
-      toast({ title: 'Please enter a valid 2-digit hotel code', variant: 'destructive' });
+    if (!domain.trim()) {
+      toast({ title: 'Domain required', description: 'Example: org1.com', variant: 'destructive' });
       return;
     }
-    if (takenCodes.includes(hotelCode)) {
-      toast({ title: 'This hotel code is already taken', variant: 'destructive' });
+    if (!adminEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
+      toast({ title: 'Valid admin email required', variant: 'destructive' });
+      return;
+    }
+    if (enabledDepartments.length === 0) {
+      toast({ title: 'Select at least one department', variant: 'destructive' });
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const { error: hotelError } = await supabase.from('hotels').insert({
-        hotel_code: hotelCode,
-        hotel_name: hotelName.trim(),
-        phone: phone.trim() || null,
+      const { data, error } = await supabase.functions.invoke('create-hotel', {
+        body: {
+          hotelName: hotelName.trim(),
+          adminEmail: adminEmail.trim(),
+          phone: phone.trim() || undefined,
+          domain: domain.trim(),
+          enabledDepartments,
+        },
       });
 
-      if (hotelError) throw hotelError;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.hotel?.id) throw new Error('Hotel created but response is missing hotel');
+
+      setHotel({
+        id: data.hotel.id,
+        hotel_code: data.hotel.hotel_code,
+        hotel_name: data.hotel.hotel_name,
+      });
 
       toast({
         title: 'Hotel registered!',
-        description: `Your hotel code is ${hotelCode}`,
+        description: `Domain linked. Hotel code: ${data.hotel.hotel_code}`,
       });
       
-      navigate('/');
+      navigate('/login');
     } catch (error: any) {
       toast({
         title: 'Registration failed',
@@ -93,25 +128,25 @@ export default function HotelRegister() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="hotelCode">Hotel Code (2 digits)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="hotelCode"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{2}"
-                  maxLength={2}
-                  placeholder="00"
-                  value={hotelCode}
-                  onChange={(e) => setHotelCode(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                  className="text-center text-2xl tracking-[0.3em] h-12 font-mono w-24"
-                />
-                {hotelCode.length === 2 && (
-                  <span className={`text-sm ${isCodeAvailable ? 'text-green-600' : 'text-red-600'}`}>
-                    {isCodeAvailable ? '✓ Available' : '✗ Taken'}
-                  </span>
-                )}
-              </div>
+              <Label htmlFor="domain">Hotel Domain</Label>
+              <Input
+                id="domain"
+                type="text"
+                placeholder="org1.com"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="adminEmail">Admin Email (receives staff codes)</Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                placeholder="admin@org1.com"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+              />
             </div>
 
             <div className="space-y-2">
@@ -125,7 +160,31 @@ export default function HotelRegister() {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12" disabled={isLoading || !isCodeAvailable}>
+            <div className="space-y-2">
+              <Label>Enable Departments</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {DEPARTMENTS.map((dept) => {
+                  const isSelected = enabledDepartments.includes(dept.value);
+                  return (
+                    <label
+                      key={dept.value}
+                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                        isSelected ? 'border-primary/60 bg-primary/5' : 'border-border/50 hover:border-primary/30'
+                      }`}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleDept(dept.value)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="text-xs font-medium">{dept.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full h-12" disabled={isLoading}>
               {isLoading ? 'Registering...' : 'Register'}
             </Button>
           </form>
