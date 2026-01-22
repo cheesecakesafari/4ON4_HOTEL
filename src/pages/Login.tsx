@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import enaitotiLogo from '@/assets/enaitoti-logo.jpg';
+import { supabaseEnv } from '@/integrations/supabase/client';
 
 export default function Login() {
   const [loginNumber, setLoginNumber] = useState('');
@@ -30,6 +31,17 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (supabaseEnv.isMisconfigured) {
+      toast({
+        title: 'Deployment misconfigured',
+        description:
+          supabaseEnv.misconfigurationReason ||
+          'This site is pointed at the wrong database. Fix Netlify env vars and redeploy.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (!isValid) {
       toast({
@@ -77,6 +89,11 @@ export default function Login() {
           <CardDescription>
             Enter your staff code (e.g., K12 or AD07)
           </CardDescription>
+          {supabaseEnv.isMisconfigured ? (
+            <CardDescription className="text-destructive">
+              {supabaseEnv.misconfigurationReason}
+            </CardDescription>
+          ) : null}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseEnv } from '@/integrations/supabase/client';
 
 interface Hotel {
   id: string;
@@ -39,6 +39,11 @@ export function HotelProvider({ children }: { children: ReactNode }) {
   };
 
   const resolveHotelByHostname = async (hostname: string): Promise<Hotel | null> => {
+    if (supabaseEnv.isMisconfigured) {
+      console.warn('Skipping hotel resolution due to Supabase misconfiguration:', supabaseEnv.misconfigurationReason);
+      return null;
+    }
+
     const normalizedHostname = hostname.trim().toLowerCase();
     if (!normalizedHostname || isLocalHostname(normalizedHostname) || isGatewayHostname(normalizedHostname)) {
       return null;
