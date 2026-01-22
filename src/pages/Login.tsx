@@ -13,7 +13,7 @@ export default function Login() {
   const [loginNumber, setLoginNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useEmployee();
-  const { hotel } = useHotel();
+  const { hotel, isHotelLoading } = useHotel();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -21,8 +21,8 @@ export default function Login() {
   const isValid = /^[A-Z]{1,2}\d{2}$/.test(normalized);
 
   useEffect(() => {
-    if (!hotel) navigate('/hotel-login');
-  }, [hotel, navigate]);
+    if (!isHotelLoading && !hotel) navigate('/hotel-login');
+  }, [hotel, isHotelLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
