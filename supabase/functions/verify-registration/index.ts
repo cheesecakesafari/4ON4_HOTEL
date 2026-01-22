@@ -62,8 +62,35 @@ serve(async (req) => {
     console.log("Found pending registration:", pending);
 
     // Check if this is an admin registration
-    const isAdmin = pending.departments.includes('admin');
+    const department = pending.department || (pending.departments?.[0] ?? null);
+    if (!department) {
+      return new Response(
+        JSON.stringify({ error: "No department found for this registration" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!pending.hotel_id) {
+      return new Response(
+        JSON.stringify({ error: "No hotelId found for this registration" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const isAdmin = department === 'admin';
     const adminSecretCode = isAdmin ? generateAdminSecretCode() : null;
+
+    // Allocate staff code per hotel + department (e.g., K01, AD12)
+    const { data: allocatedCode, error: allocError } = await supabase
+      .rpc('allocate_staff_code', { p_hotel_id: pending.hotel_id, p_department: department });
+
+    if (allocError || !allocatedCode) {
+      console.error('Error allocating staff code:', allocError);
+      return new Response(
+        JSON.stringify({ error: "Failed to allocate staff code" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Create employee record with optional admin_secret_code
     const { data: employee, error: employeeError } = await supabase
@@ -71,7 +98,8 @@ serve(async (req) => {
       .insert({
         name: pending.name,
         phone: pending.phone,
-        login_number: pending.staff_code,
+        hotel_id: pending.hotel_id,
+        login_number: allocatedCode,
         admin_secret_code: adminSecretCode,
       })
       .select()
@@ -87,15 +115,10 @@ serve(async (req) => {
 
     console.log("Created employee:", employee);
 
-    // Create department assignments
-    const departmentInserts = pending.departments.map((dept: string) => ({
-      employee_id: employee.id,
-      department: dept,
-    }));
-
+    // Create single department assignment
     const { error: deptError } = await supabase
       .from("employee_departments")
-      .insert(departmentInserts);
+      .insert({ employee_id: employee.id, department });
 
     if (deptError) {
       console.error("Error creating department assignments:", deptError);
@@ -113,7 +136,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        staffCode: pending.staff_code,
+        staffCode: allocatedCode,
         adminSecretCode: adminSecretCode, // Will be null for non-admins
         message: "Registration completed successfully"
       }),

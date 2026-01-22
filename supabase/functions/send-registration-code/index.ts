@@ -13,17 +13,8 @@ const corsHeaders = {
 interface RegistrationRequest {
   name: string;
   phone: string;
-  departments: string[];
-}
-
-// Generate a unique staff code: 1 letter + 2 numbers (e.g., A22, W87)
-function generateStaffCode(): string {
-  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // Removed ambiguous chars (O, I)
-  const numbers = "0123456789";
-  const letter = letters.charAt(Math.floor(Math.random() * letters.length));
-  const num1 = numbers.charAt(Math.floor(Math.random() * numbers.length));
-  const num2 = numbers.charAt(Math.floor(Math.random() * numbers.length));
-  return letter + num1 + num2;
+  department: string;
+  hotelId: string;
 }
 
 // Generate a 6-digit verification code
@@ -38,13 +29,13 @@ serve(async (req) => {
   }
 
   try {
-    const { name, phone, departments }: RegistrationRequest = await req.json();
+    const { name, phone, department, hotelId }: RegistrationRequest = await req.json();
 
-    console.log("Received registration request:", { name, phone, departments });
+    console.log("Received registration request:", { name, phone, department, hotelId });
 
-    if (!name || !phone || !departments || departments.length === 0) {
+    if (!name || !phone || !department || !hotelId) {
       return new Response(
-        JSON.stringify({ error: "Name, phone, and at least one department are required" }),
+        JSON.stringify({ error: "Name, phone, hotelId, and department are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -54,72 +45,9 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check admin limit (max 2)
-    if (departments.includes("admin")) {
-      const { data: adminDepts } = await supabase
-        .from("employee_departments")
-        .select("id")
-        .eq("department", "admin");
-      
-      if (adminDepts && adminDepts.length >= 2) {
-        return new Response(
-          JSON.stringify({ error: "Cannot register more admin accounts. Maximum 2 admins allowed." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // Check accountant limit (max 2)
-    if (departments.includes("accountant")) {
-      const { data: accountantDepts } = await supabase
-        .from("employee_departments")
-        .select("id")
-        .eq("department", "accountant");
-      
-      if (accountantDepts && accountantDepts.length >= 2) {
-        return new Response(
-          JSON.stringify({ error: "Cannot register more accountant accounts. Maximum 2 accountants allowed." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // Generate unique staff code (check for uniqueness)
-    let staffCode: string;
-    let isUnique = false;
-    let attempts = 0;
-
-    do {
-      staffCode = generateStaffCode();
-      
-      // Check if code exists in employees
-      const { data: existingEmployee } = await supabase
-        .from("employees")
-        .select("id")
-        .eq("login_number", staffCode)
-        .single();
-
-      // Check if code exists in pending registrations
-      const { data: existingPending } = await supabase
-        .from("pending_registrations")
-        .select("id")
-        .eq("staff_code", staffCode)
-        .single();
-
-      isUnique = !existingEmployee && !existingPending;
-      attempts++;
-    } while (!isUnique && attempts < 10);
-
-    if (!isUnique) {
-      return new Response(
-        JSON.stringify({ error: "Unable to generate unique staff code. Please try again." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const verificationCode = generateVerificationCode();
 
-    console.log("Generated codes:", { staffCode, verificationCode });
+    console.log("Generated verification code:", { verificationCode });
 
     // Clean up expired pending registrations
     await supabase
@@ -133,9 +61,11 @@ serve(async (req) => {
       .insert({
         name,
         phone,
-        departments,
+        departments: [department],
+        department,
+        hotel_id: hotelId,
         verification_code: verificationCode,
-        staff_code: staffCode,
+        staff_code: null,
       });
 
     if (insertError) {
@@ -146,10 +76,25 @@ serve(async (req) => {
       );
     }
 
+    // Resolve admin email from hotel record (fallback to function env ADMIN_EMAIL)
+    const { data: hotel } = await supabase
+      .from('hotels')
+      .select('id, hotel_name, email')
+      .eq('id', hotelId)
+      .maybeSingle();
+
+    const resolvedAdminEmail = (hotel?.email || adminEmail)?.trim();
+    if (!resolvedAdminEmail) {
+      return new Response(
+        JSON.stringify({ error: "No admin email configured for this hotel" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Send email to admin
     const emailResponse = await resend.emails.send({
       from: "Enaitoti Hotel <onboarding@resend.dev>",
-      to: [adminEmail!],
+      to: [resolvedAdminEmail],
       subject: `New Staff Registration - ${name}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -161,7 +106,7 @@ serve(async (req) => {
             <h2 style="color: #4F46E5; margin-top: 0;">Staff Details</h2>
             <p><strong>Name:</strong> ${name}</p>
             <p><strong>Phone:</strong> ${phone}</p>
-            <p><strong>Departments:</strong> ${departments.join(", ")}</p>
+            <p><strong>Department:</strong> ${department}</p>
           </div>
           
           <div style="background: #4F46E5; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
@@ -174,9 +119,7 @@ serve(async (req) => {
           <p style="color: #666; font-size: 14px;">
             This verification code expires in <strong>15 minutes</strong>.
           </p>
-          <p style="color: #666; font-size: 14px;">
-            Once verified, the staff member will be assigned code: <strong>${staffCode}</strong>
-          </p>
+          <p style="color: #666; font-size: 14px;">Once verified, a staff code will be assigned automatically.</p>
           
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
           <p style="color: #999; font-size: 12px;">

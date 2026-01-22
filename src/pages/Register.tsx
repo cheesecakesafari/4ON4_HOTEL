@@ -10,6 +10,7 @@ import { UserPlus, ArrowLeft, CheckCircle, Loader2, ShieldAlert } from 'lucide-r
 import { useToast } from '@/hooks/use-toast';
 import { DepartmentRole } from '@/contexts/EmployeeContext';
 import enaitotiLogo from '@/assets/enaitoti-logo.jpg';
+import { useHotel } from '@/contexts/HotelContext';
 
 const DEPARTMENTS: { value: DepartmentRole; label: string; icon: string }[] = [
   { value: 'restaurant', label: 'Restaurant', icon: '🍽️' },
@@ -27,7 +28,7 @@ type RegistrationStep = 'details' | 'verification' | 'success';
 export default function Register() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [selectedDepartments, setSelectedDepartments] = useState<DepartmentRole[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentRole | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [assignedStaffCode, setAssignedStaffCode] = useState('');
   const [adminSecretCode, setAdminSecretCode] = useState<string | null>(null);
@@ -35,14 +36,9 @@ export default function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hotel } = useHotel();
 
-  const toggleDepartment = (dept: DepartmentRole) => {
-    setSelectedDepartments(prev =>
-      prev.includes(dept)
-        ? prev.filter(d => d !== dept)
-        : [...prev, dept]
-    );
-  };
+  const toggleDepartment = (dept: DepartmentRole) => setSelectedDepartment(dept);
 
   const handleSubmitDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +51,13 @@ export default function Register() {
       toast({ title: 'Phone number required', variant: 'destructive' });
       return;
     }
-    if (selectedDepartments.length === 0) {
-      toast({ title: 'Select at least one department', variant: 'destructive' });
+    if (!hotel?.id) {
+      toast({ title: 'Select a hotel first', description: 'Enter your hotel code to continue', variant: 'destructive' });
+      navigate('/hotel-login');
+      return;
+    }
+    if (!selectedDepartment) {
+      toast({ title: 'Select a department', variant: 'destructive' });
       return;
     }
 
@@ -67,7 +68,8 @@ export default function Register() {
         body: {
           name: name.trim(),
           phone: phone.trim(),
-          departments: selectedDepartments,
+          department: selectedDepartment,
+          hotelId: hotel.id,
         },
       });
 
@@ -154,7 +156,7 @@ export default function Register() {
         <Label className="text-xs">Select Your Department(s)</Label>
         <div className="grid grid-cols-2 gap-2">
           {DEPARTMENTS.map((dept) => {
-            const isSelected = selectedDepartments.includes(dept.value);
+            const isSelected = selectedDepartment === dept.value;
             return (
               <label
                 key={dept.value}

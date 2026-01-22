@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useHotel } from '@/contexts/HotelContext';
 
 export type DepartmentRole = 'restaurant' | 'kitchen' | 'rooms' | 'conference' | 'accountant' | 'admin' | 'bar' | 'bar_admin';
 
@@ -23,6 +24,7 @@ interface EmployeeContextType {
 const EmployeeContext = createContext<EmployeeContextType | undefined>(undefined);
 
 export function EmployeeProvider({ children }: { children: ReactNode }) {
+  const { hotel } = useHotel();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeDepartment, setActiveDepartment] = useState<DepartmentRole | null>(null);
@@ -46,11 +48,16 @@ export function EmployeeProvider({ children }: { children: ReactNode }) {
   const login = async (loginNumber: string): Promise<{ success: boolean; error?: string }> => {
     try {
       // Find employee by login_number (staff code is unique identifier)
-      const { data: empData, error: empError } = await supabase
+      let employeeQuery = supabase
         .from('employees')
         .select('*')
-        .eq('login_number', loginNumber)
-        .maybeSingle();
+        .eq('login_number', loginNumber);
+
+      if (hotel?.id) {
+        employeeQuery = employeeQuery.eq('hotel_id', hotel.id);
+      }
+
+      const { data: empData, error: empError } = await employeeQuery.maybeSingle();
 
       if (empError) throw empError;
       if (!empData) return { success: false, error: 'Staff not found' };
