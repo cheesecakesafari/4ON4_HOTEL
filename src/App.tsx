@@ -24,10 +24,7 @@ function RootRedirect() {
   const isMainEntrance = hostname === '4on4.world' || hostname === 'www.4on4.world';
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
-  if (hotel) return <Navigate to="/login" replace />;
   if (isMainEntrance || isLocal) return <Navigate to="/hotel-register" replace />;
-  // For other domains, we assume they are registered & will resolve hotel via hotel_domains.
-  // If not, login will block because hotel is required.
   return <Navigate to="/login" replace />;
 }
 

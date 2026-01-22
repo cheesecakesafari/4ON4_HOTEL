@@ -24,6 +24,9 @@ export function HotelProvider({ children }: { children: ReactNode }) {
   const isLocalHostname = (hostname: string) =>
     hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
+  const isGatewayHostname = (hostname: string) =>
+    hostname === '4on4.world' || hostname === 'www.4on4.world';
+
   const loadStoredHotel = () => {
     const stored = localStorage.getItem('current_hotel');
     if (!stored) return null;
@@ -37,7 +40,9 @@ export function HotelProvider({ children }: { children: ReactNode }) {
 
   const resolveHotelByHostname = async (hostname: string): Promise<Hotel | null> => {
     const normalizedHostname = hostname.trim().toLowerCase();
-    if (!normalizedHostname || isLocalHostname(normalizedHostname)) return null;
+    if (!normalizedHostname || isLocalHostname(normalizedHostname) || isGatewayHostname(normalizedHostname)) {
+      return null;
+    }
 
     const { data: mapping, error: mappingError } = await supabase
       .from('hotel_domains')
@@ -78,10 +83,17 @@ export function HotelProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       setIsHotelLoading(true);
 
-      const storedHotel = loadStoredHotel();
-      if (storedHotel) setHotelState(storedHotel);
+      const hostname = window.location.hostname.trim().toLowerCase();
 
-      const hostname = window.location.hostname;
+      // 4on4.world is a gateway only; do not persist or reuse any hotel selection there.
+      if (isGatewayHostname(hostname)) {
+        setHotelState(null);
+        localStorage.removeItem('current_hotel');
+      } else {
+        const storedHotel = loadStoredHotel();
+        if (storedHotel) setHotelState(storedHotel);
+      }
+
       const resolved = await resolveHotelByHostname(hostname);
 
       if (!cancelled) {
