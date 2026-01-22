@@ -47,15 +47,15 @@ export function EmployeeProvider({ children }: { children: ReactNode }) {
 
   const login = async (loginNumber: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      if (!hotel?.id) return { success: false, error: 'Hotel not selected' };
+
       // Find employee by login_number (staff code is unique identifier)
       let employeeQuery = supabase
         .from('employees')
         .select('*')
         .eq('login_number', loginNumber);
 
-      if (hotel?.id) {
-        employeeQuery = employeeQuery.eq('hotel_id', hotel.id);
-      }
+      employeeQuery = employeeQuery.eq('hotel_id', hotel.id);
 
       const { data: empData, error: empError } = await employeeQuery.maybeSingle();
 
