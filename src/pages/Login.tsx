@@ -21,7 +21,7 @@ export default function Login() {
   const isValid = /^[A-Z]{1,2}\d{2}$/.test(normalized);
 
   useEffect(() => {
-    if (!isHotelLoading && !hotel) navigate('/hotel-login');
+    if (!isHotelLoading && !hotel) navigate('/hotel-register');
   }, [hotel, isHotelLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {

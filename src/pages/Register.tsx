@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -12,15 +12,15 @@ import { DepartmentRole } from '@/contexts/EmployeeContext';
 import enaitotiLogo from '@/assets/enaitoti-logo.jpg';
 import { useHotel } from '@/contexts/HotelContext';
 
-const DEPARTMENTS: { value: DepartmentRole; label: string; icon: string }[] = [
+const ALL_DEPARTMENTS: { value: DepartmentRole; label: string; icon: string }[] = [
   { value: 'restaurant', label: 'Restaurant', icon: '🍽️' },
   { value: 'kitchen', label: 'Kitchen', icon: '👨‍🍳' },
-  { value: 'rooms', label: 'Rooms', icon: '🛏️' },
+  { value: 'rooms', label: 'Rooms + Laundry', icon: '🛏️' },
   { value: 'conference', label: 'Conference', icon: '📅' },
   { value: 'bar', label: 'Bar Staff', icon: '🍺' },
   { value: 'bar_admin', label: 'Bar Admin', icon: '🍻' },
-  { value: 'accountant', label: 'Accountant', icon: '📊' },
-  { value: 'admin', label: 'General Admin', icon: '⚙️' },
+  { value: 'accountant', label: 'Accounts', icon: '📊' },
+  { value: 'admin', label: 'Admin', icon: '⚙️' },
 ];
 
 type RegistrationStep = 'details' | 'verification' | 'success';
@@ -38,6 +38,48 @@ export default function Register() {
   const { toast } = useToast();
   const { hotel } = useHotel();
 
+  const [enabledDepartments, setEnabledDepartments] = useState<DepartmentRole[] | null>(null);
+
+  useEffect(() => {
+    const loadEnabledDepartments = async () => {
+      if (!hotel?.id) {
+        setEnabledDepartments(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('hotel_department_settings')
+        .select('department, enabled')
+        .eq('hotel_id', hotel.id)
+        .eq('enabled', true);
+
+      if (error) {
+        console.error('Failed to load hotel departments:', error);
+        setEnabledDepartments([]);
+        return;
+      }
+
+      const depts = (data || []).map((row: any) => row.department as DepartmentRole);
+      setEnabledDepartments(depts);
+    };
+
+    loadEnabledDepartments();
+  }, [hotel?.id]);
+
+  const visibleDepartments = useMemo(() => {
+    if (!enabledDepartments) return [];
+    return ALL_DEPARTMENTS
+      .filter((d) => enabledDepartments.includes(d.value))
+      .map((d) => {
+        // If hotel only enables bar-related depts + accountant, label accountant as Bar Accounting
+        if (d.value === 'accountant') {
+          const hotelOnly = enabledDepartments.every((x) => ['bar', 'bar_admin', 'accountant'].includes(x));
+          if (hotelOnly) return { ...d, label: 'Bar Accounting' };
+        }
+        return d;
+      });
+  }, [enabledDepartments]);
+
   const toggleDepartment = (dept: DepartmentRole) => setSelectedDepartment(dept);
 
   const handleSubmitDetails = async (e: React.FormEvent) => {
@@ -53,7 +95,7 @@ export default function Register() {
     }
     if (!hotel?.id) {
       toast({ title: 'Select a hotel first', description: 'Enter your hotel code to continue', variant: 'destructive' });
-      navigate('/hotel-login');
+      navigate('/hotel-register');
       return;
     }
     if (!selectedDepartment) {
@@ -155,7 +197,7 @@ export default function Register() {
       <div className="space-y-2">
         <Label className="text-xs">Select Your Department(s)</Label>
         <div className="grid grid-cols-2 gap-2">
-          {DEPARTMENTS.map((dept) => {
+          {visibleDepartments.map((dept) => {
             const isSelected = selectedDepartment === dept.value;
             return (
               <label

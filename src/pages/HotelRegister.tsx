@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useHotel } from '@/contexts/HotelContext';
@@ -20,33 +20,71 @@ type DepartmentRole =
   | 'accountant'
   | 'admin';
 
-const DEPARTMENTS: { value: DepartmentRole; label: string }[] = [
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'kitchen', label: 'Kitchen' },
-  { value: 'rooms', label: 'Rooms' },
-  { value: 'conference', label: 'Conference' },
-  { value: 'bar', label: 'Bar Staff' },
-  { value: 'bar_admin', label: 'Bar Admin' },
-  { value: 'accountant', label: 'Accounts' },
-  { value: 'admin', label: 'Admin' },
-];
+type Step = 'form' | 'success';
 
 export default function HotelRegister() {
+  const [step, setStep] = useState<Step>('form');
   const [hotelName, setHotelName] = useState('');
   const [domain, setDomain] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [enabledDepartments, setEnabledDepartments] = useState<DepartmentRole[]>(['restaurant']);
+  const [createdHostname, setCreatedHostname] = useState<string | null>(null);
+
+  const [useHotelManagement, setUseHotelManagement] = useState(true);
+  const [useBarManagement, setUseBarManagement] = useState(false);
+
+  // Hotel module options
+  const [enableFood, setEnableFood] = useState(true); // Kitchen + Restaurant
+  const [enableRooms, setEnableRooms] = useState(true); // Rooms (+Laundry)
+  const [enableConference, setEnableConference] = useState(false);
+
+  // Bar module options
+  const [enableBarAdmin, setEnableBarAdmin] = useState(true);
+  const [enableBarStaff, setEnableBarStaff] = useState(true);
+  const [enableBarAccounting, setEnableBarAccounting] = useState(false); // maps to accountant
+
   const navigate = useNavigate();
   const { toast } = useToast();
   const { setHotel } = useHotel();
 
-  const toggleDept = (dept: DepartmentRole) => {
-    setEnabledDepartments((prev) =>
-      prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
-    );
-  };
+  const enabledDepartments = useMemo(() => {
+    const departments = new Set<DepartmentRole>();
+
+    if (useHotelManagement) {
+      // Always include Admin + Accounts for hotel management
+      departments.add('admin');
+      departments.add('accountant');
+
+      if (enableFood) {
+        departments.add('kitchen');
+        departments.add('restaurant');
+      }
+      if (enableRooms) {
+        departments.add('rooms');
+      }
+      if (enableConference) {
+        departments.add('conference');
+      }
+    }
+
+    if (useBarManagement) {
+      if (enableBarAdmin) departments.add('bar_admin');
+      if (enableBarStaff) departments.add('bar');
+      if (enableBarAccounting) departments.add('accountant');
+    }
+
+    return Array.from(departments);
+  }, [
+    useHotelManagement,
+    useBarManagement,
+    enableFood,
+    enableRooms,
+    enableConference,
+    enableBarAdmin,
+    enableBarStaff,
+    enableBarAccounting,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,11 +94,15 @@ export default function HotelRegister() {
       return;
     }
     if (!domain.trim()) {
-      toast({ title: 'Domain required', description: 'Example: org1.com', variant: 'destructive' });
+      toast({ title: 'Domain required', description: 'Example: yourhotel.com', variant: 'destructive' });
       return;
     }
     if (!adminEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
       toast({ title: 'Valid admin email required', variant: 'destructive' });
+      return;
+    }
+    if (!useHotelManagement && !useBarManagement) {
+      toast({ title: 'Choose Hotel or Bar management', variant: 'destructive' });
       return;
     }
     if (enabledDepartments.length === 0) {
@@ -93,10 +135,11 @@ export default function HotelRegister() {
 
       toast({
         title: 'Hotel registered!',
-        description: `Domain linked. Hotel code: ${data.hotel.hotel_code}`,
+        description: `Created successfully. Hotel code: ${data.hotel.hotel_code}`,
       });
-      
-      navigate('/login');
+
+      setCreatedHostname(data.hostname || domain.trim());
+      setStep('success');
     } catch (error: any) {
       toast({
         title: 'Registration failed',
@@ -112,87 +155,146 @@ export default function HotelRegister() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl font-semibold">Register Hotel</CardTitle>
+          <CardTitle className="text-xl font-semibold">
+            {step === 'form' ? 'Hotel Registration' : 'Hotel Created'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="hotelName">Hotel Name</Label>
-              <Input
-                id="hotelName"
-                type="text"
-                placeholder="Enter hotel name"
-                value={hotelName}
-                onChange={(e) => setHotelName(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="domain">Hotel Domain</Label>
-              <Input
-                id="domain"
-                type="text"
-                placeholder="org1.com"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="adminEmail">Admin Email (receives staff codes)</Label>
-              <Input
-                id="adminEmail"
-                type="email"
-                placeholder="admin@org1.com"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="Phone number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Enable Departments</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {DEPARTMENTS.map((dept) => {
-                  const isSelected = enabledDepartments.includes(dept.value);
-                  return (
-                    <label
-                      key={dept.value}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                        isSelected ? 'border-primary/60 bg-primary/5' : 'border-border/50 hover:border-primary/30'
-                      }`}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleDept(dept.value)}
-                        className="h-3.5 w-3.5"
-                      />
-                      <span className="text-xs font-medium">{dept.label}</span>
-                    </label>
-                  );
-                })}
+          {step === 'form' ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="hotelName">Hotel Name</Label>
+                <Input
+                  id="hotelName"
+                  type="text"
+                  placeholder="Enter hotel name"
+                  value={hotelName}
+                  onChange={(e) => setHotelName(e.target.value)}
+                />
               </div>
-            </div>
 
-            <Button type="submit" className="w-full h-12" disabled={isLoading}>
-              {isLoading ? 'Registering...' : 'Register'}
-            </Button>
-          </form>
+              <div className="space-y-2">
+                <Label htmlFor="domain">Hotel Domain</Label>
+                <Input
+                  id="domain"
+                  type="text"
+                  placeholder="yourhotel.com"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="adminEmail">Email to send codes to</Label>
+                <Input
+                  id="adminEmail"
+                  type="email"
+                  placeholder="admin@yourhotel.com"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Choose Management</Label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                    <Checkbox
+                      checked={useHotelManagement}
+                      onCheckedChange={() => setUseHotelManagement((v) => !v)}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span className="text-sm font-medium">Hotel Management</span>
+                  </label>
+                  <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                    <Checkbox
+                      checked={useBarManagement}
+                      onCheckedChange={() => setUseBarManagement((v) => !v)}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span className="text-sm font-medium">Bar Management</span>
+                  </label>
+                </div>
+              </div>
+
+              {useHotelManagement && (
+                <div className="space-y-2">
+                  <Label>Hotel Departments</Label>
+                  <div className="text-xs text-muted-foreground">Admin + Accounts are included automatically.</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableFood} onCheckedChange={() => setEnableFood((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Kitchen + Restaurant</span>
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableRooms} onCheckedChange={() => setEnableRooms((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Rooms + Laundry</span>
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableConference} onCheckedChange={() => setEnableConference((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Conference</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {useBarManagement && (
+                <div className="space-y-2">
+                  <Label>Bar Departments</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableBarAdmin} onCheckedChange={() => setEnableBarAdmin((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Bar Admin</span>
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableBarStaff} onCheckedChange={() => setEnableBarStaff((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Bar Staff</span>
+                    </label>
+                    <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer">
+                      <Checkbox checked={enableBarAccounting} onCheckedChange={() => setEnableBarAccounting((v) => !v)} className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">Bar Accounting</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" className="w-full h-12" disabled={isLoading}>
+                {isLoading
+                  ? 'Creating...'
+                  : useHotelManagement && useBarManagement
+                    ? 'Create Hotel + Bar'
+                    : useHotelManagement
+                      ? 'Create Hotel'
+                      : 'Create Bar'}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-muted-foreground">Visit your domain to access your hotel</p>
+              <div className="rounded-lg border p-3 font-mono text-sm">
+                {createdHostname || domain}
+              </div>
+              <Button className="w-full" onClick={() => navigate('/login')}>
+                Go to Staff Login
+              </Button>
+            </div>
+          )}
 
           <div className="mt-4 text-center">
             <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
               <ArrowLeft className="w-4 h-4 mr-1" />
-              Back to Login
+              Back
             </Button>
           </div>
         </CardContent>

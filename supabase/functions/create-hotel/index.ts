@@ -67,7 +67,7 @@ async function generateUniqueHotelCode(supabase: ReturnType<typeof createClient>
   throw new Error("Unable to allocate hotel code");
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

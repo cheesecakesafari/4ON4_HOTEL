@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { EmployeeProvider } from "./contexts/EmployeeContext";
 import { HotelProvider } from "./contexts/HotelContext";
+import { useHotel } from "./contexts/HotelContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import RecoverCode from "./pages/RecoverCode";
@@ -15,6 +16,12 @@ import HotelRegister from "./pages/HotelRegister";
 
 const queryClient = new QueryClient();
 
+function RootRedirect() {
+  const { hotel, isHotelLoading } = useHotel();
+  if (isHotelLoading) return null;
+  return <Navigate to={hotel ? "/login" : "/hotel-register"} replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -24,7 +31,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/hotel-login" element={<HotelLogin />} />
               <Route path="/hotel-register" element={<HotelRegister />} />
               <Route path="/login" element={<Login />} />
