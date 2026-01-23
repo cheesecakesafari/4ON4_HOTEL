@@ -25,7 +25,8 @@ function RootRedirect() {
     hostname === '4on4.world' ||
     hostname === 'www.4on4.world' ||
     hostname === 'hotelsystem.services' ||
-    hostname === 'www.hotelsystem.services';
+    hostname === 'www.hotelsystem.services' ||
+    hostname.endsWith('.netlify.app');
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
   if (isGateway || isLocal) return <Navigate to="/hotel-register" replace />;

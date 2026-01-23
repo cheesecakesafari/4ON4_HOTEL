@@ -28,7 +28,8 @@ export function HotelProvider({ children }: { children: ReactNode }) {
     hostname === '4on4.world' ||
     hostname === 'www.4on4.world' ||
     hostname === 'hotelsystem.services' ||
-    hostname === 'www.hotelsystem.services';
+    hostname === 'www.hotelsystem.services' ||
+    hostname.endsWith('.netlify.app');
 
   const loadStoredHotel = () => {
     const stored = localStorage.getItem('current_hotel');
