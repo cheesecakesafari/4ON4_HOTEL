@@ -24,9 +24,13 @@ export default function Login() {
   useEffect(() => {
     if (isHotelLoading || hotel) return;
     const hostname = window.location.hostname.toLowerCase();
-    const isMainEntrance = hostname === '4on4.world' || hostname === 'www.4on4.world';
+    const isGateway =
+      hostname === '4on4.world' ||
+      hostname === 'www.4on4.world' ||
+      hostname === 'hotelsystem.services' ||
+      hostname === 'www.hotelsystem.services';
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
-    if (isMainEntrance || isLocal) navigate('/hotel-register');
+    if (isGateway || isLocal) navigate('/hotel-register');
   }, [hotel, isHotelLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,7 +71,7 @@ export default function Login() {
         title: result.error === 'Hotel not selected' ? 'Hotel not found' : 'Incorrect staff code',
         description:
           result.error === 'Hotel not selected'
-            ? 'This domain is not yet linked to a hotel. Register the hotel first on 4on4.world, then try again.'
+            ? 'This domain is not yet linked to a hotel. Register the hotel first on the gateway, then try again.'
             : 'Try another or register to get a code.',
         variant: 'destructive',
       });

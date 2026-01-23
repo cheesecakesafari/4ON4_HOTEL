@@ -21,10 +21,14 @@ function RootRedirect() {
   if (isHotelLoading) return null;
 
   const hostname = window.location.hostname.toLowerCase();
-  const isMainEntrance = hostname === '4on4.world' || hostname === 'www.4on4.world';
+  const isGateway =
+    hostname === '4on4.world' ||
+    hostname === 'www.4on4.world' ||
+    hostname === 'hotelsystem.services' ||
+    hostname === 'www.hotelsystem.services';
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
-  if (isMainEntrance || isLocal) return <Navigate to="/hotel-register" replace />;
+  if (isGateway || isLocal) return <Navigate to="/hotel-register" replace />;
   return <Navigate to="/login" replace />;
 }
 

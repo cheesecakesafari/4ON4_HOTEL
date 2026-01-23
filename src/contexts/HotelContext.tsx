@@ -25,7 +25,10 @@ export function HotelProvider({ children }: { children: ReactNode }) {
     hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
   const isGatewayHostname = (hostname: string) =>
-    hostname === '4on4.world' || hostname === 'www.4on4.world';
+    hostname === '4on4.world' ||
+    hostname === 'www.4on4.world' ||
+    hostname === 'hotelsystem.services' ||
+    hostname === 'www.hotelsystem.services';
 
   const loadStoredHotel = () => {
     const stored = localStorage.getItem('current_hotel');
@@ -90,7 +93,7 @@ export function HotelProvider({ children }: { children: ReactNode }) {
 
       const hostname = window.location.hostname.trim().toLowerCase();
 
-      // 4on4.world is a gateway only; do not persist or reuse any hotel selection there.
+      // Gateway domains are onboarding-only; do not persist or reuse any hotel selection there.
       if (isGatewayHostname(hostname)) {
         setHotelState(null);
         localStorage.removeItem('current_hotel');
